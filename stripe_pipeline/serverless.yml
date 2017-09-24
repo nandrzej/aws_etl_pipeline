@@ -1,0 +1,102 @@
+service: stripePaymentsPipeline
+
+provider:
+  name: aws
+  runtime: python3.6
+  stage: dev
+  region: eu-central-1
+
+plugins:
+  - serverless-step-functions
+
+functions:
+  storeSource:
+    handler: handlers.save_source_in_s3
+
+  savePayment:
+    handler: handlers.put_in_dynamodb
+
+resources:
+  Resources:
+    StripeSources:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: stripe.sources
+
+    PaymentTable:
+      Type: AWS::DynamoDB::Table
+      AttributeDefinitions:
+      - AttributeName: PaymentId
+        AttributeType: S
+      - AttributeName: CustomerId
+        AttributeType: S
+      - AttributeName: NameOnPayment
+        AttributeType: S
+      - AttributeName: BillingCountry
+        AttributeType: S
+      - AttributeName: BillingAddress
+        AttributeType: S
+      - AttributeName: BillingCity
+        AttributeType: S
+      - AttributeName: BillingZipCode
+        AttributeType: S
+      - AttributeName: PaymentType
+        AttributeType: S
+      - AttributeName: PaymentAmount
+        AttributeType: N
+      - AttributeName: PaymentDate
+        AttributeType: S
+      KeySchema:
+      - AttributeName: PaymentId
+        KeyType: HASH
+      - AttributeName: PaymentDate
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: GSI
+        KeySchema:
+        - AttributeName: CustomerId
+          KeyType: HASH
+        Projection:
+          ProjectionType: KEYS_ONLY
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  Outputs:
+    StripePaymentsSources:
+      Description: "Extracted source on S3"
+      Value:
+        Fn::GetAtt: [ StripeSources,  WebsiteURL ]
+
+stepFunctions:
+  stateMachines:
+    processPaymentStateMachine:
+      events:
+        - http:
+            path: stripe/payments
+            method: PUT
+      definition:
+        Comment: "Execution of storeSource and savePayment in parallel."
+        StartAt: ExtractSourceAndStorePayment
+        States:
+          ExtractSourceAndStorePayment:
+            Type: Parallel
+            Next: Final State
+            Branches:
+            - StartAt: StoreSource
+              States:
+                StoreSource:
+                  Type: Task
+                  Resource: arn:aws:lambda:us-east-1:123456789012:function:storeSource
+                  End: true
+            - StartAt: StoreSource
+              States:
+                StoreSource:
+                  Type: Task
+                  Resource: arn:aws:lambda:us-east-1:123456789012:function:savePayment
+                  End: true
+          Final State:
+            Type: Pass
+            End: true
