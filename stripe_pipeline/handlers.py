@@ -81,8 +81,8 @@ def get_value(a_dict, keys):
     if keys[0] in a_dict:
         if len(keys) == 1:
             return a_dict[keys[0]]
-
-        return get_value(a_dict[keys[0]], keys[1:])
+        else:
+            return get_value(a_dict[keys[0]], keys[1:])
     else:
         raise JSONFormatException(
             '{} not found in input JSON'.format(keys[0]))

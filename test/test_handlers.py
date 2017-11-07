@@ -11,6 +11,7 @@ def test_get_value():
 
     with pytest.raises(JSONFormatException) as error:
         get_value(a_dict, ('a', 'b', 'c'))
+        
     assert 'c not found in input JSON' in str(error.value)
 
 
